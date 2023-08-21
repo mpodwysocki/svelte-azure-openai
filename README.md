@@ -23,6 +23,8 @@ Create a `.env` file in the root directory and add your OpenAI API key.
 
 ```bash
 OPENAI_API_KEY=xxx
+OPENAI_ENDPOINT=xxx
+OPENAI_MODEL=xxx
 ```
 
 ## Demo

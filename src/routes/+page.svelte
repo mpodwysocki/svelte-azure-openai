@@ -1,22 +1,100 @@
 <script lang="ts">
-  import { useChat } from 'ai/svelte';
-  import TextArea from '$lib/components/TextArea.svelte';
-  import Profile from '$lib/components/Profile.svelte';
-  import SubmitButton from '$lib/components/SubmitButton.svelte';
-  import Message from '$lib/components/Message.svelte';
+  import TextArea from "$lib/components/TextArea.svelte";
+  import Profile from "$lib/components/Profile.svelte";
+  import SubmitButton from "$lib/components/SubmitButton.svelte";
+  import Message from "$lib/components/Message.svelte";
+  import { get, writable } from "svelte/store";
+  import type { Writable } from "svelte/store";
+  import { v4 as uuid } from "uuid";
 
   let messageContainer: HTMLElement | null = null;
+
+  type ChatMessage = {
+    id?: string;
+    createdAt?: Date;
+    content: string;
+    role: "system" | "user" | "assistant" | "function";
+  }
 
   function scrollToBottom() {
     if (messageContainer) {
       messageContainer.scroll({
         top: messageContainer.scrollHeight,
-        behavior: 'smooth'
+        behavior: "smooth"
       });
     }
   }
 
-  const { input, handleSubmit, messages } = useChat();
+  let initialInput = "";
+  let input = writable(initialInput);
+  let initialMessages: ChatMessage[] = [];
+  let messages: Writable<ChatMessage[]> = writable(initialMessages);
+
+  const triggerRequest = async () => {
+    const inputValue = get(input);
+    if (!inputValue) {
+      return;
+    }
+
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(get(messages))
+    });
+
+    let responseMessage: ChatMessage = {
+      id: uuid(),
+      content: "",
+      role: "assistant"
+    }
+
+    messages.update((messages) => {
+      messages.push(responseMessage);
+      return messages;
+    });
+
+    const reader = response.body!.pipeThrough(new TextDecoderStream()).getReader();
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      responseMessage.content += value;
+      messages.update((messages) => {
+        messages[messages.length - 1] = responseMessage;
+        return messages;
+      });
+    }
+  };
+
+  const append = async (message: ChatMessage) => {
+    message.id = uuid();
+    messages.update((messages) => {
+      messages.push(message);
+      return messages;
+    });
+    await triggerRequest();
+  }
+
+  const handleSubmit = async (e: Event) => {
+    e.preventDefault();
+    const inputValue = get(input);
+    if (!inputValue) {
+      return;
+    }
+
+    append(
+      {
+        content: inputValue,
+        role: "user"
+      }
+    )
+    input.set("");
+  };
+
 
   $: {
     if ($messages) {
@@ -26,7 +104,7 @@
 </script>
 
 <svelte:head>
-  <title>SvelteGPT</title>
+  <title>Svelte Azure Open AI</title>
 </svelte:head>
 
 <div
